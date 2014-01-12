@@ -1,0 +1,23 @@
+  </div>
+</div>
+
+<script type="text/javascript">
+var converter = new Showdown.converter();
+
+angular.module('showdown', []).directive('dudaPost', function(){
+    return {
+        restrict: 'C',
+        controller: function(){},
+        link: function(scope, element, attrs) {
+            var md = converter.makeHtml(element.html().trim());
+            element.html(md)
+        }
+    }
+})
+
+var app = angular.module('app', ['showdown']);
+
+</script>
+<script>hljs.initHighlightingOnLoad();</script>
+</body>
+</html>

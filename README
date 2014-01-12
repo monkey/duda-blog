@@ -1,0 +1,11 @@
+Duda I/O Blog
+=============
+This is the Blogging system used on blog.duda.io, a C based web
+service that generate and expose HTML from Markdown files.
+
+It do not aim to be a complete blogging tool such as Wordpress,
+just only the basics to cover Duda I/O project needs.
+
+Author
+======
+Eduardo Silva P. <edsiper@gmail.com>
