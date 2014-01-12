@@ -4,7 +4,9 @@ This is a simple Blogging tool built on top of [Duda I/O](http://duda.io) framew
 
 ## Source code
 
-For more details about the source code behind this Blog please refer to the main GIT repository of the project here http://git.monkey-project.com/?p=duda-blog;a=tree.
+For more details about the source code behind this Blog please refer to the main GIT repository of the project here:
+
+ * http://git.monkey-project.com/?p=duda-blog;a=tree.
 
 ## Contribute
 
