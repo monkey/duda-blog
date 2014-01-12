@@ -52,20 +52,24 @@ static int blog_init_templates()
     return 0;
 }
 
-void cb_posts(duda_request_t *dr)
+/*
+ * For a given request URI and a section name, compose the absolute path
+ * of the requested resource.
+ */
+static char *blog_get_path(duda_request_t *dr, char *section)
 {
     int pos;
     char *id;
-    char *post_path = NULL;
+    char *path = NULL;
     unsigned long len;
 
     pos = monkey->str_search_n(dr->sr->uri_processed.data,
-                               "/posts/",
+                               section,
                                MK_STR_SENSITIVE,
                                dr->sr->uri_processed.len);
 
     if (pos < 0 || dr->sr->uri_processed.len <= 7) {
-        goto not_found;
+        return NULL;
     }
 
     /* get the POST id or title */
@@ -73,42 +77,65 @@ void cb_posts(duda_request_t *dr)
                                  pos + 7,
                                  dr->sr->uri_processed.len);
     if (!id) {
-        goto not_found;
-    }
-    else {
-        gc->add(dr, id);
+        return NULL;
     }
 
     /* Check if the post exists */
-    monkey->str_build(&post_path, &len,
-                      "%s/posts/%s.md",
+    monkey->str_build(&path, &len,
+                      "%s%s%s.md",
                       data->get_path(),
+                      section,
                       id);
-    gc->add(dr, post_path);
+    monkey->mem_free(id);
+    gc->add(dr, path);
 
-    if (access(post_path, R_OK) != 0) {
-        goto not_found;
+    if (access(path, R_OK) != 0) {
+        monkey->mem_free(path);
+        return NULL;
     }
 
-    /* Everything is OK, lets compose the response */
-    response->http_status(dr, 200);
-    response->http_content_type(dr, "html");
-    response->sendfile(dr, tpl_header);
-    response->sendfile(dr, tpl_post_header);
-    response->sendfile(dr, post_path);
-    response->sendfile(dr, tpl_post_footer);
-    response->sendfile(dr, tpl_footer);
-    response->end(dr, NULL);
+    return path;
+}
 
- not_found:
-    response->http_status(dr, 404);
+/* Wrapper callback to return a content with template data */
+void cb_wrapper(duda_request_t *dr, char *section)
+{
+    char *post_path = NULL;
+
+    post_path = blog_get_path(dr, section);
+
     response->http_content_type(dr, "html");
     response->sendfile(dr, tpl_header);
-    response->sendfile(dr, tpl_error_404);
+
+    if (!post_path) {
+        response->http_status(dr, 404);
+        response->sendfile(dr, tpl_error_404);
+    }
+    else {
+        /* Everything is OK, lets compose the response */
+        response->http_status(dr, 200);
+        response->sendfile(dr, tpl_post_header);
+        response->sendfile(dr, post_path);
+        response->sendfile(dr, tpl_post_footer);
+    }
+
     response->sendfile(dr, tpl_footer);
     response->end(dr, NULL);
 }
 
+/* Callback for /posts/ */
+void cb_posts(duda_request_t *dr)
+{
+    return cb_wrapper(dr, "/posts/");
+}
+
+/* Callback for /pages/ */
+void cb_pages(duda_request_t *dr)
+{
+    return cb_wrapper(dr, "/pages/");
+}
+
+/* Callback for home page */
 void cb_home(duda_request_t *dr)
 {
     response->http_status(dr, 200);
@@ -128,6 +155,7 @@ int duda_main()
 
     /* callbacks */
     map->static_add("/posts", "cb_posts");
+    map->static_add("/pages", "cb_pages");
     map->static_root("cb_home");
 
     return 0;
