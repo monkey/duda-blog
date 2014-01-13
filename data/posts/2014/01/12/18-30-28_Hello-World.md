@@ -7,6 +7,6 @@ This is the first post entry into [Duda-Blog](http://blog.duda.io) project, this
 
 For more details about the source of this blog service, please clone the source code using the following command:
 
-```C
+```Bash
 $ git clone git://git.monkey-project.com/duda-blog
 ```

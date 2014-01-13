@@ -58,7 +58,10 @@ static int blog_init_templates()
     return 0;
 }
 
-
+/* 
+ * We use a Key/Value store to have a map between POSTs requests 
+ * and the absolute path for each file representing the information.
+ */
 static char *blog_kv_post_get(char *hash)
 {
     int rc;
@@ -77,8 +80,8 @@ static char *blog_kv_post_get(char *hash)
 }
 
 /*
- * For a given request URI and a section name, compose the absolute path
- * of the requested resource.
+ * For a given request URI, compose the absolute path
+ * of the Post.
  */
 static char *blog_post_get_path(duda_request_t *dr)
 {
@@ -115,6 +118,18 @@ static char *blog_post_get_path(duda_request_t *dr)
      * not found we perform a directory search.
      */
     path = blog_kv_post_get(id);
+    if (path) {
+        if (access(path, R_OK) != 0) {
+            /* Invalidate the cache entry */
+            kv->delete(posts_map, path, -1);
+            monkey->mem_free(path);
+            path = NULL;
+        }
+        else {
+            return path;
+        }
+    }
+
     if (!path) {
         /*
          * the path was not found in our KV, lets open the directory that
