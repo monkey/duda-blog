@@ -2,7 +2,9 @@
 
 /* system */
 #include <sys/types.h>
-#include <dirent.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <sys/types.h>
 
 /* duda */
 #include "webservice.h"
@@ -10,6 +12,7 @@
 
 /* service */
 #include "blog.h"
+#include "post.h"
 
 DUDA_REGISTER("Duda I/O - Blog", "Blog");
 
@@ -58,8 +61,8 @@ static int blog_init_templates()
     return 0;
 }
 
-/* 
- * We use a Key/Value store to have a map between POSTs requests 
+/*
+ * We use a Key/Value store to have a map between POSTs requests
  * and the absolute path for each file representing the information.
  */
 static char *blog_kv_post_get(char *hash)
@@ -86,25 +89,17 @@ static char *blog_kv_post_get(char *hash)
 static char *blog_post_get_path(duda_request_t *dr)
 {
     int pos;
-    int offset;
-    int title_len;
     int sec_len = sizeof(BLOG_POSTS_URI) - 1;
     char *id;
-    char *date;
-    char *title;
     char *path = NULL;
-    char *dir_path = NULL;
     unsigned long len;
-    DIR *d;
-    struct dirent *dirent;
 
     pos = monkey->str_search_n(dr->sr->uri_processed.data,
                                BLOG_POSTS_URI,
                                MK_STR_SENSITIVE,
                                dr->sr->uri_processed.len);
 
-    if (pos < 0 || dr->sr->uri_processed.len <= sec_len ||
-        (dr->sr->uri_processed.len - (pos + sec_len)) < 12) {
+    if (pos < 0 || dr->sr->uri_processed.len <= sec_len) {
         return NULL;
     }
 
@@ -112,6 +107,7 @@ static char *blog_post_get_path(duda_request_t *dr)
     id = monkey->str_copy_substr(dr->sr->uri_processed.data,
                                  pos + sec_len,
                                  dr->sr->uri_processed.len);
+
     /*
      * once we get the ID, we perform a search in our Key Value store
      * to determinate whats the absolute path for the post file. If its
@@ -136,77 +132,22 @@ static char *blog_post_get_path(duda_request_t *dr)
          * contains blog posts for the given date and perform a search.
          */
 
-        /* get POST date, eg: '2014/01/12' */
-        offset = pos + sec_len;
-        date = monkey->str_copy_substr(dr->sr->uri_processed.data,
-                                       offset,
-                                       offset + 10);
-        if (!date) {
-            monkey->mem_free(id);
-            return NULL;
-        }
-
         /* Compose the target directory path */
-        monkey->str_build(&dir_path, &len,
-                          "%s/posts/%s/",
+        monkey->str_build(&path, &len,
+                          "%s/posts/%s.md",
                           data->get_path(),
-                          date);
+                          id);
 
-        d = opendir(dir_path);
-        if (!d) {
-            monkey->mem_free(id);
-            monkey->mem_free(dir_path);
+
+        if (access(path, R_OK) != 0) {
+            monkey->mem_free(path);
             return NULL;
         }
 
-        /* get the POST title (previous ID + 11 chars offset) */
-        title = id + 11;
-        title_len = strlen(title);
-
-        while ((dirent = readdir(d)) != NULL) {
-            /*
-             * A blog post file should have the following format on its name:
-             *
-             * hours-min-seconds_title.md
-             *
-             * where hours, minutes and seconds are two characters each one,
-             * followed by an underscore and the Post Title, e.g:
-             *
-             *   18-40-20_Hello-World.md
-             *
-             * we are just interested into the title so we can skip the time
-             * fields, its unlikely someone would post two entries in the same
-             * day with the same title.
-             */
-
-            if (dirent->d_type != DT_REG) {
-                continue;
-            }
-
-            if (dirent->d_name[0] == '.' || strcmp(dirent->d_name, "..") == 0) {
-                continue;
-            }
-
-            if (strncmp(dirent->d_name + 9, title, title_len) == 0 &&
-                strcmp(dirent->d_name + 9 + title_len, ".md") == 0) {
-                monkey->str_build(&path, &len,
-                                  "%s%s",
-                                  dir_path,
-                                  dirent->d_name);
-
-                /* we have the path, now register this into the KV */
-                kv->store(posts_map, id, -1, path, len);
-                break;
-            }
-        }
-        closedir(d);
+        kv->store(posts_map, id, -1, path, len);
     }
 
     monkey->mem_free(id);
-    if (dir_path) {
-        monkey->mem_free(dir_path);
-    }
-
     if (access(path, R_OK) != 0) {
         monkey->mem_free(path);
         return NULL;
@@ -232,7 +173,7 @@ static char *blog_page_get_path(duda_request_t *dr)
         return NULL;
     }
 
-    /* get the full POST id, e.g: '2014/01/12/Hello-World' */
+    /* Get the POST id (title) */
     id = monkey->str_copy_substr(dr->sr->uri_processed.data,
                                  pos + sec_len,
                                  dr->sr->uri_processed.len);
@@ -257,10 +198,18 @@ static char *blog_page_get_path(duda_request_t *dr)
 /* Wrapper callback to return a content with template data */
 void cb_wrapper(duda_request_t *dr, int resource)
 {
+    int offset = 0;
+    time_t post_ts;
     char *path = NULL;
+    char *date = NULL;
 
     if (resource == BLOG_POST) {
-        path = blog_post_get_path(dr);
+        path    = blog_post_get_path(dr);
+        post_ts = post_get_timestamp(path);
+        date    = post_format_ts(post_ts);
+        if (date) {
+            offset = 18;
+        }
     }
     else if (resource == BLOG_PAGE) {
         path = blog_page_get_path(dr);
@@ -277,7 +226,12 @@ void cb_wrapper(duda_request_t *dr, int resource)
         /* Everything is OK, lets compose the response */
         response->http_status(dr, 200);
         response->sendfile(dr, tpl_post_header);
-        response->sendfile(dr, path);
+
+        if (date) {
+            response->printf(dr, "%s\n", date);
+            response->sendfile_range(dr, path, offset, 0);
+        }
+
         response->sendfile(dr, tpl_post_footer);
         gc->add(dr, path);
     }
@@ -326,5 +280,6 @@ int duda_main()
     map->static_add("/pages", "cb_pages");
     map->static_root("cb_home");
 
+    post_generator();
     return 0;
 }
