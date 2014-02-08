@@ -215,6 +215,51 @@ static char *blog_page_get_path(duda_request_t *dr)
     return path;
 }
 
+/* Send out a range of registered blog entries */
+void cb_page(duda_request_t *dr)
+{
+    time_t creat;
+    char *path;
+    char *date;
+    char *title;
+    struct tm *tmz;
+    sqlite_handle_t *handle = NULL;
+    char *sql = "SELECT creation, slug FROM posts ORDER BY id desc";
+
+    path = mem->alloc(MK_MAX_PATH);
+    date = mem->alloc(80);
+    tmz  = mem->alloc(sizeof(struct tm));
+
+    gc->add(dr, path);
+    gc->add(dr, date);
+    gc->add(dr, tmz);
+
+    sqlite->dump(db, sql, &handle);
+    sqlite_foreach(handle) {
+        creat = sqlite->get_int(handle, 0);
+        title = (char *) sqlite->get_text(handle, 1);
+
+        gmtime_r(&creat, tmz);
+
+        strftime(date, 80, "%B %d, %Y", tmz);
+        snprintf(path, MK_MAX_PATH,
+                 "%s/posts/%s.md",
+                 data->get_path(),
+                 title);
+
+        response->printf(dr,
+                         "<br /><span class='label label-primary'>%s</span>",
+                         date);
+        response->printf(dr, "<div class='duda-post'>");
+        response->sendfile(dr, path);
+        response->printf(dr, "</div>");
+    }
+    sqlite->done(handle);
+
+    response->http_status(dr, 200);
+    response->end(dr, NULL);
+}
+
 /*
  * We take care to serve static content from a callback instead of
  * Duda core because our posts are mapped starting from the first URI slash
@@ -307,6 +352,7 @@ int duda_main()
     conf->service_root();
 
     /* callbacks */
+    map->static_add("/page/", "cb_page");
     map->static_add("/static/", "cb_static");
     map->static_add("/favicon.ico", "cb_static");
     map->static_add("/", "cb_posts");
