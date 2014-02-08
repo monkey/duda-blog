@@ -1,8 +1,13 @@
 # Duda I/O Blog
 
-This is the Blogging system used on http://blog.duda.io, a C based web service that generate and expose HTML from Markdown files.
+This is the Blogging system used on http://blog.duda.io, a C based web service that generate and expose rendered Markdown files in HTML format.
 
-It do not aim to be a complete blogging tool such as Wordpress, just only the basics to cover Duda I/O project needs.
+It do not aim to be a complete blogging tool such as Wordpress, just only the basics to cover Duda I/O project needs:
+
+ * a made at home Blog
+ * Entries that can look as documentation or technical articles more than a common Blog post.
+ * Managed from the command line
+ * Place another Duda I/O application.
 
 ## Build Requirements
 
@@ -26,7 +31,7 @@ Now try the following URL:
 
   [http://localhost:8080/]([http://localhost:8080/)
 
-## Installing first post
+## Installing the first post
 
 In the examples directory you can find the Hello World post example, the goal of this file is to instruct how to install this post into the blog system using the _bladmin_ tool:
 
