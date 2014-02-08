@@ -1,14 +1,6 @@
-CC      = gcc -g -Wall -DDEBUG
-INCDIR  = ../../src -I../../../../src/include/ -I../../
-OBJECTS = main.o post.o
-
-all: blog.duda
-
-blog.duda: $(OBJECTS)
-	$(CC) $(CFLAGS) $(LDFLAGS) $(DEFS) -shared -o $@ $^ -lc
-
-.c.o:
-	$(CC) $(CFLAGS) $(LDFLAGS) $(DEFS) -I$(INCDIR) -fPIC -c $<
-
-clean:
-	rm -rf *.o *~ *.*duda*
+NAME    = blog
+CC      = gcc
+CFLAGS  = -g -Wall
+LDFLAGS =
+INCDIR  =
+OBJECTS = main.o db.o post.o

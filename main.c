@@ -1,5 +1,24 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 
+/*  Duda I/O Blog
+ *  -------------
+ *  Copyright (C) 2014, Eduardo Silva P. <edsiper@gmail.com>.
+ *
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU Library General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program; if not, write to the Free Software
+ *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ */
+
 /* system */
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -9,8 +28,10 @@
 /* duda */
 #include "webservice.h"
 #include "packages/kv/kv.h"
+#include "packages/sqlite/sqlite.h"
 
 /* service */
+#include "db.h"
 #include "blog.h"
 #include "post.h"
 
@@ -29,33 +50,33 @@ static int blog_init_templates()
     }
 
     /* header */
-    tmp = monkey->mem_alloc(MAX_PATH);
-    snprintf(tmp, MAX_PATH, "%s/templates/header.html", p);
+    tmp = mem->alloc(MK_MAX_PATH);
+    snprintf(tmp, MK_MAX_PATH, "%s/templates/header.html", p);
     tpl_header = tmp;
 
     /* home intro */
-    tmp = monkey->mem_alloc(MAX_PATH);
-    snprintf(tmp, MAX_PATH, "%s/templates/home_intro.html", p);
+    tmp = mem->alloc(MK_MAX_PATH);
+    snprintf(tmp, MK_MAX_PATH, "%s/templates/home_intro.html", p);
     tpl_home_intro = tmp;
 
     /* blog post header */
-    tmp = monkey->mem_alloc(MAX_PATH);
-    snprintf(tmp, MAX_PATH, "%s/templates/post_header.html", p);
+    tmp = mem->alloc(MK_MAX_PATH);
+    snprintf(tmp, MK_MAX_PATH, "%s/templates/post_header.html", p);
     tpl_post_header = tmp;
 
     /* blog post footer */
-    tmp = monkey->mem_alloc(MAX_PATH);
-    snprintf(tmp, MAX_PATH, "%s/templates/post_footer.html", p);
+    tmp = mem->alloc(MK_MAX_PATH);
+    snprintf(tmp, MK_MAX_PATH, "%s/templates/post_footer.html", p);
     tpl_post_footer = tmp;
 
     /* error 404: not found */
-    tmp = monkey->mem_alloc(MAX_PATH);
-    snprintf(tmp, MAX_PATH, "%s/templates/error_404.html", p);
+    tmp = mem->alloc(MK_MAX_PATH);
+    snprintf(tmp, MK_MAX_PATH, "%s/templates/error_404.html", p);
     tpl_error_404 = tmp;
 
     /* footer */
-    tmp = monkey->mem_alloc(MAX_PATH);
-    snprintf(tmp, MAX_PATH, "%s/templates/footer.html", p);
+    tmp = mem->alloc(MK_MAX_PATH);
+    snprintf(tmp, MK_MAX_PATH, "%s/templates/footer.html", p);
     tpl_footer = tmp;
 
     return 0;
@@ -71,11 +92,11 @@ static char *blog_kv_post_get(char *hash)
     unqlite_int64 len;
     char *p = NULL;
 
-    p = monkey->mem_alloc(MAX_PATH);
-    len = MAX_PATH;
+    p = mem->alloc(MK_MAX_PATH);
+    len = MK_MAX_PATH;
     rc = kv->fetch(posts_map, hash, -1, p, &len);
     if (rc != UNQLITE_OK) {
-        monkey->mem_free(p);
+        mem->free(p);
         p = NULL;
     }
 
@@ -103,7 +124,7 @@ static char *blog_post_get_path(duda_request_t *dr)
         return NULL;
     }
 
-    /* get the full POST id, e.g: '2014/01/12/Hello-World' */
+    /* get the full POST id, e.g: '/Hello-World' */
     id = monkey->str_copy_substr(dr->sr->uri_processed.data,
                                  pos + sec_len,
                                  dr->sr->uri_processed.len);
@@ -118,7 +139,7 @@ static char *blog_post_get_path(duda_request_t *dr)
         if (access(path, R_OK) != 0) {
             /* Invalidate the cache entry */
             kv->delete(posts_map, path, -1);
-            monkey->mem_free(path);
+            mem->free(path);
             path = NULL;
         }
         else {
@@ -138,18 +159,17 @@ static char *blog_post_get_path(duda_request_t *dr)
                           data->get_path(),
                           id);
 
-
         if (access(path, R_OK) != 0) {
-            monkey->mem_free(path);
+            mem->free(path);
             return NULL;
         }
 
         kv->store(posts_map, id, -1, path, len);
     }
 
-    monkey->mem_free(id);
+    mem->free(id);
     if (access(path, R_OK) != 0) {
-        monkey->mem_free(path);
+        mem->free(path);
         return NULL;
     }
 
@@ -185,15 +205,35 @@ static char *blog_page_get_path(duda_request_t *dr)
                       "%s/pages/%s.md",
                       data->get_path(),
                       id);
-    monkey->mem_free(id);
+    mem->free(id);
 
     if (access(path, R_OK) != 0) {
-        monkey->mem_free(path);
+        mem->free(path);
         return NULL;
     }
 
     return path;
 }
+
+/*
+ * We take care to serve static content from a callback instead of
+ * Duda core because our posts are mapped starting from the first URI slash
+ */
+void cb_static (duda_request_t *dr)
+{
+    char *path = mem->alloc_z(MK_MAX_PATH);
+
+    /* what a nasty hack */
+    snprintf(path,
+             self->docroot.len + 1 + dr->sr->uri_processed.len - 8,
+             "%s%s", self->docroot.data, dr->sr->uri_processed.data + 8);
+    gc->add(dr, path);
+
+    response->http_status(dr, 200);
+    response->sendfile(dr, path);
+    response->end(dr, NULL);
+}
+
 
 /* Wrapper callback to return a content with template data */
 void cb_wrapper(duda_request_t *dr, int resource)
@@ -267,6 +307,10 @@ int duda_main()
 {
     /* Init packages */
     duda_load_package(kv, "kv");
+    duda_load_package(sqlite, "sqlite");
+
+    /* Initialize database */
+    blog_db_init();
 
     kv->init(&posts_map);
 
@@ -276,10 +320,10 @@ int duda_main()
     conf->service_root();
 
     /* callbacks */
-    map->static_add("/posts", "cb_posts");
-    map->static_add("/pages", "cb_pages");
+    map->static_add("/static/", "cb_static");
+    map->static_add("/favicon.ico", "cb_static");
+    map->static_add("/", "cb_posts");
     map->static_root("cb_home");
 
-    post_generator();
     return 0;
 }

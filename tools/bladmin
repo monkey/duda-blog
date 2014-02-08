@@ -1,0 +1,162 @@
+#!/usr/bin/env python
+
+# Copyright (C) 2014, Eduardo Silva <edsiper@gmail.com>
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+
+import os
+import sys
+import time
+import getopt
+import shutil
+import sqlite3 as lite
+
+ANSI_BOLD    = "\033[1m"
+ANSI_CYAN    = "\033[36m"
+ANSI_MAGENTA = "\033[35m"
+ANSI_RED     = "\033[31m"
+ANSI_YELLOW  = "\033[33m"
+ANSI_BLUE    = "\033[34m"
+ANSI_GREEN   = "\033[32m"
+ANSI_WHITE   = "\033[37m"
+ANSI_RESET   = "\033[0m"
+
+def info(title, message):
+    header = ANSI_BOLD + "[+] " + ANSI_RESET + ANSI_YELLOW
+    header += "%-15s" % title
+    body   = ANSI_RESET + message
+    print header + body
+
+class Bladmin():
+
+    def __init__(self):
+        self.db_conn    = None
+        self.cmd_update = None
+        self.blog_path  = None
+        self.parse_arguments()
+        self.run()
+
+    def slug(self, text):
+        s = text.replace(' ', '-')
+        return s
+
+    def new_post(self, title):
+        post_slug = self.slug(title)
+        target = post_slug + '.md'
+        info('File', target)
+
+        raw  = '###### %i\n' % int(time.time())
+        raw += '# ' + title + '\n'
+        raw += '\n---\n\n'
+        raw += 'your content goes here\n'
+
+        print raw
+
+    def run(self):
+        if self.cmd_update is not None:
+            if os.path.isfile(self.cmd_update) is False or \
+                    self.cmd_update[-3:] != '.md':
+                print "Error: invalid Post file\n"
+                sys.exit(1)
+
+            # Copy the file into data/posts, override old one if exists
+            name = self.cmd_update.split('/')[-1]
+            target = self.blog_path + "/data/posts/" + name
+
+            if os.path.isfile(target) is True:
+                os.unlink(target)
+                print "[+] Removing old copy %s" % target
+
+            shutil.copy(self.cmd_update, target)
+            print "[+] Copying %s to %s" % (self.cmd_update, target)
+
+            # Update the database entry
+            now   = int(time.time())
+            slug  = name[:-3]
+            name  = slug.replace('-', ' ')
+            query = "SELECT id FROM posts WHERE slug='%s'" % slug
+
+            f = open(self.cmd_update, 'r')
+            body = f.read()
+            f.close()
+
+            cur = self.db_conn.cursor()
+            cur.execute(query)
+            data = cur.fetchone()
+
+            if data is None:
+                query  = "INSERT INTO posts (creation, modification, title, slug) "
+                query += "VALUES (%i, %i, '%s', '%s')"
+
+                sql = query % (now, now, name, slug)
+                cur.execute(sql)
+                self.db_conn.commit()
+
+                print "[+] Inserted Post ID", cur.lastrowid
+            else:
+                query = "UPDATE posts SET modification=%i WHERE id=%i"
+                sql   = query % (now, data[0])
+                cur.execute(sql)
+                self.db_conn.commit()
+
+                print "[+] Updated Post ID", data[0]
+
+            sys.exit(0)
+
+    def parse_arguments(self):
+
+        # Validate blog path
+        self.blog_path = sys.argv[-1]
+        if os.path.isdir(self.blog_path) is False:
+            print "Error: invalid blog directory '%s'\n" % self.blog_path
+            self.print_help()
+            sys.exit(1)
+
+        db_path = self.blog_path + "/data/blog.db"
+        if os.path.isfile(db_path) is False:
+            print "Error: Database have not been created\n"
+            sys.exit(1)
+
+        # Open the database
+        self.db_conn = lite.connect(db_path)
+
+        # Reading command line arguments
+        try:
+            optlist, args = getopt.getopt(sys.argv[1:], 'i:')
+        except getopt.GetoptError:
+            self.print_help()
+            sys.exit(2)
+
+        if len(optlist) == 0:
+            self.print_help()
+
+        # Check options
+        for op, arg in optlist:
+            if op == '-i':
+                self.cmd_update = arg
+
+    def print_version(self):
+        print_bold("Blog Administration Tool")
+        print_color("http://duda.io", ANSI_YELLOW, True)
+
+    def print_help(self):
+        print "Usage: bladmin [-n 'Post Title'] /path/to/blog\n"
+        print ANSI_BOLD + ANSI_WHITE + "Options" + ANSI_RESET
+        print "  -i  FILE\tInsert new post"
+        print "  -v\t\tPrint version"
+        print
+
+if __name__ == "__main__":
+    bl = Bladmin()

@@ -17,5 +17,5 @@ char *tpl_footer;
 #define BLOG_PAGE         0x1
 
 #define BLOG_PAGES_URI    "/pages/"
-#define BLOG_POSTS_URI    "/posts/"
+#define BLOG_POSTS_URI    "/"
 #endif

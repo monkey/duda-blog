@@ -129,13 +129,13 @@ int post_generator()
     time_t t;
     struct post **post_arr;
     struct post **temp_arr;
-    char post_path[MAX_PATH];
-    char posts[MAX_PATH];
+    char post_path[MK_MAX_PATH];
+    char posts[MK_MAX_PATH];
     struct dirent *dirent;
     struct mk_list list;
 
     /* First step generate a sorted list of available posts */
-    snprintf(posts, MAX_PATH, "%s/posts/", data->get_path());
+    snprintf(posts, MK_MAX_PATH, "%s/posts/", data->get_path());
 
     d = opendir(posts);
     if (!d) {
@@ -164,7 +164,7 @@ int post_generator()
             continue;
         }
 
-        snprintf(post_path, MAX_PATH, "%s/posts/%s",
+        snprintf(post_path, MK_MAX_PATH, "%s/posts/%s",
                  data->get_path(), dirent->d_name);
 
         t = post_get_timestamp(post_path);
