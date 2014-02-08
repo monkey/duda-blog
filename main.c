@@ -238,18 +238,10 @@ void cb_static (duda_request_t *dr)
 /* Wrapper callback to return a content with template data */
 void cb_wrapper(duda_request_t *dr, int resource)
 {
-    int offset = 0;
-    time_t post_ts;
     char *path = NULL;
-    char *date = NULL;
 
     if (resource == BLOG_POST) {
         path    = blog_post_get_path(dr);
-        post_ts = post_get_timestamp(path);
-        date    = post_format_ts(post_ts);
-        if (date) {
-            offset = 18;
-        }
     }
     else if (resource == BLOG_PAGE) {
         path = blog_page_get_path(dr);
@@ -266,12 +258,7 @@ void cb_wrapper(duda_request_t *dr, int resource)
         /* Everything is OK, lets compose the response */
         response->http_status(dr, 200);
         response->sendfile(dr, tpl_post_header);
-
-        if (date) {
-            response->printf(dr, "%s\n", date);
-            response->sendfile_range(dr, path, offset, 0);
-        }
-
+        response->sendfile(dr, path);
         response->sendfile(dr, tpl_post_footer);
         gc->add(dr, path);
     }
