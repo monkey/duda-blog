@@ -252,7 +252,7 @@ void cb_page(duda_request_t *dr)
                          date);
         response->printf(dr, "<div class='duda-post'>");
         response->sendfile(dr, path);
-        response->printf(dr, "</div>");
+        response->printf(dr, "\n\n---\n\n</div>");
     }
     sqlite->done(handle);
 
