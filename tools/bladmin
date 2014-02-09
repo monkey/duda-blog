@@ -75,12 +75,15 @@ class Bladmin():
             name = self.cmd_update.split('/')[-1]
             target = self.blog_path + "/data/posts/" + name
 
-            if os.path.isfile(target) is True:
-                os.unlink(target)
-                print "[+] Removing old copy %s" % target
+            if os.path.normpath(self.cmd_update) == os.path.normpath(target):
+                print "[+] Source and target are the same file, OK"
+            else:
+                if os.path.isfile(target) is True:
+                    os.unlink(target)
+                    print "[+] Removing old copy %s" % target
 
-            shutil.copy(self.cmd_update, target)
-            print "[+] Copying %s to %s" % (self.cmd_update, target)
+                    shutil.copy(self.cmd_update, target)
+                    print "[+] Copying %s to %s" % (self.cmd_update, target)
 
             # Update the database entry
             now   = int(time.time())
